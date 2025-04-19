@@ -6,6 +6,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.concurrent.*;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
 @Slf4j
 @RestController
@@ -23,17 +25,18 @@ public class HelloResource {
     }
 
     @GetMapping("/parallel")
-    public String parallelHello() throws ExecutionException, InterruptedException, TimeoutException {
+    public String parallelHello() throws Throwable {
         try (var executor = Executors.newSingleThreadScheduledExecutor()) {
             Future<String> hello = executor.submit(() -> getMessage("Hello", 400));
             Future<String> world = executor.submit(() -> getMessage("World", 600));
 
-            return hello.get(1, TimeUnit.SECONDS) + " " + world.get(1, TimeUnit.SECONDS);
+            return join(hello, world, (h, w) -> h + " " + w);
         }
     }
 
     @GetMapping("/parallel/result")
     public String parallelHelloResult() throws Exception {
+        // this approach is recommended when using thread pool to not leave loose threads on exceptions
         try (var executor = Executors.newSingleThreadScheduledExecutor()) {
             Future<Result<String, Exception>> hello = executor.submit(() -> getResult("Hello", 400));
             Future<Result<String, Exception>> world = executor.submit(() -> getResult("World", 600));
@@ -41,9 +44,15 @@ public class HelloResource {
             return switch (hello.get()) {
                 case Result.Ok(String h) -> switch (world.get()) {
                     case Result.Ok(String w) -> h + " " + w;
-                    case Result.Err(Exception e) -> throw e;
+                    case Result.Err(Exception e) -> {
+                        hello.cancel(true);
+                        throw e;
+                    }
                 };
-                case Result.Err(Exception e) -> throw e;
+                case Result.Err(Exception e) -> {
+                    world.cancel(true);
+                    throw e;
+                }
             };
         }
     }
@@ -67,6 +76,22 @@ public class HelloResource {
             return message;
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    private <I1, I2, O> O join(Future<I1> f1, Future<I2> f2, BiFunction<I1, I2, O> fn) throws Throwable {
+        try {
+            return fn.apply(f1.get(), f2.get());
+        } catch (Exception e) {
+            if (f1.state() == Future.State.FAILED) {
+                f2.cancel(true);
+                throw f1.exceptionNow();
+            } else if (f2.state() == Future.State.FAILED) {
+                f1.cancel(true);
+                throw f2.exceptionNow();
+            } else {
+                throw e;
+            }
         }
     }
 
