@@ -1,13 +1,12 @@
 package it.codingjam.virtualthreadspoc.resource;
 
+import it.codingjam.virtualthreadspoc.utils.Futures;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.concurrent.*;
-import java.util.function.BiFunction;
-import java.util.function.Function;
 
 @Slf4j
 @RestController
@@ -25,12 +24,12 @@ public class HelloResource {
     }
 
     @GetMapping("/parallel")
-    public String parallelHello() throws Throwable {
+    public String parallelHello() {
         try (var executor = Executors.newSingleThreadScheduledExecutor()) {
             Future<String> hello = executor.submit(() -> getMessage("Hello", 400));
             Future<String> world = executor.submit(() -> getMessage("World", 600));
 
-            return join(hello, world, (h, w) -> h + " " + w);
+            return Futures.join(hello, world, (h, w) -> h + " " + w);
         }
     }
 
@@ -76,22 +75,6 @@ public class HelloResource {
             return message;
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
-        }
-    }
-
-    private <I1, I2, O> O join(Future<I1> f1, Future<I2> f2, BiFunction<I1, I2, O> fn) throws Throwable {
-        try {
-            return fn.apply(f1.get(), f2.get());
-        } catch (Exception e) {
-            if (f1.state() == Future.State.FAILED) {
-                f2.cancel(true);
-                throw f1.exceptionNow();
-            } else if (f2.state() == Future.State.FAILED) {
-                f1.cancel(true);
-                throw f2.exceptionNow();
-            } else {
-                throw e;
-            }
         }
     }
 
