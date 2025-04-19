@@ -35,8 +35,8 @@ public class HelloResource {
     @GetMapping("/parallel/result")
     public String parallelHelloResult() throws Exception {
         try (var executor = Executors.newSingleThreadScheduledExecutor()) {
-            Future<Result> hello = executor.submit(() -> getResult("Hello", 400));
-            Future<Result> world = executor.submit(() -> getResult("World", 600));
+            Future<Result<String, Exception>> hello = executor.submit(() -> getResult("Hello", 400));
+            Future<Result<String, Exception>> world = executor.submit(() -> getResult("World", 600));
 
             return switch (hello.get()) {
                 case Result.Ok(String h) -> switch (world.get()) {
@@ -48,14 +48,14 @@ public class HelloResource {
         }
     }
 
-    private static Result getResult(String message, long duration) {
+    private static Result<String, Exception> getResult(String message, long duration) {
         try {
             log.info("Before sleep on thread {} for {}", Thread.currentThread(), message);
             Thread.sleep(duration);
             log.info("After sleep on thread {} for {}", Thread.currentThread(), message);
-            return new Result.Ok(message);
+            return new Result.Ok<>(message);
         } catch (InterruptedException e) {
-            return new Result.Err(e);
+            return new Result.Err<>(e);
         }
     }
 
@@ -70,8 +70,8 @@ public class HelloResource {
         }
     }
 
-    sealed interface Result permits Result.Ok, Result.Err {
-        record Ok(String value) implements Result {}
-        record Err(Exception e) implements Result {}
+    sealed interface Result<T, E> permits Result.Ok, Result.Err {
+        record Ok<T, E extends Exception>(T value) implements Result<T, E> {}
+        record Err<T, E extends Exception>(E e) implements Result<T, E> {}
     }
 }
