@@ -63,6 +63,7 @@ public class HelloResource {
             log.info("After sleep on thread {} for {}", Thread.currentThread(), message);
             return new Result.Ok<>(message);
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             return new Result.Err<>(e);
         }
     }
@@ -74,6 +75,7 @@ public class HelloResource {
             log.info("After sleep on thread {} for {}", Thread.currentThread(), message);
             return message;
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             throw new RuntimeException(e);
         }
     }
