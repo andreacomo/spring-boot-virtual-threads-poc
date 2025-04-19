@@ -36,6 +36,8 @@ public class HelloResource {
     @GetMapping("/parallel/result")
     public String parallelHelloResult() throws Exception {
         // this approach is recommended when using thread pool to not leave loose threads on exceptions
+        // it's not robust on CancellationException and InterruptException
+        // (maybe parallelHello approach is more Java-like -- this is more Rust-like).
         try (var executor = Executors.newSingleThreadScheduledExecutor()) {
             Future<Result<String, Exception>> hello = executor.submit(() -> getResult("Hello", 400));
             Future<Result<String, Exception>> world = executor.submit(() -> getResult("World", 600));
